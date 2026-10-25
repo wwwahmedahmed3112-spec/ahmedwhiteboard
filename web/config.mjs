@@ -1,6 +1,6 @@
 export const CONFIG = {
   "commerceMode": "manual",
-  "appVersion": "2.1.1",
+  "appVersion": "2.2.0",
   "owner": "أحمد أشرف عبد العليم",
   "publicKey": {
     "kty": "EC",
@@ -10,7 +10,7 @@ export const CONFIG = {
   },
   "checkoutUrl": null,
   "instapayPhone": "01206949036",
-  "priceLabel": "100 جنيه مصري — شراء مرة واحدة",
+  "priceLabel": "100 جنيه مصري شهريًا",
   "salesEnabled": true,
   "downloads": {
     "windows": null,

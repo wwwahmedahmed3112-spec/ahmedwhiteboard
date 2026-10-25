@@ -1,0 +1,32 @@
+<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src data:"><title>إصدار اشتراك شهري — أحمد</title><style>body{font:18px system-ui;background:#10213d;color:#edf3ff;padding:24px;line-height:1.8}main{max-width:700px;margin:auto}label{display:block;margin-top:20px}input,button{font:inherit;padding:10px;border-radius:10px;max-width:100%;box-sizing:border-box}input[type=text]{width:100%}button{background:#537ce4;color:white;border:0;margin-top:24px;cursor:pointer}p{color:#cedcf5}#message{white-space:pre-wrap}</style><main><h1>إصدار وتجديد Pro الشهري</h1><p>100 جنيه مصري لكل شهر تقويمي. افتح هذه الأداة محليًا بعد تنزيلها. المفتاح الخاص يظل على جهازك، ولا تُرسل هذه الصفحة أية طلبات شبكة.</p><label>ملف مفتاح المالك الخاص (.pem)<input id="keyFile" type="file" accept=".pem"></label><label>اسم المشترك<input id="customer" type="text" maxlength="120"></label><label>ترخيص المشترك السابق للتجديد المبكر (اختياري)<input id="previous" type="file" accept=".sablicense,.json"></label><label><input id="confirmed" type="checkbox"> تحققت من وصول مبلغ 100 جنيه فعليًا.</label><button id="issue">إصدار ملف الاشتراك الشهري</button><p id="message" role="status"></p><p>التجديد المبكر يضيف شهرًا إلى نهاية المدة الحالية. التجديد بعد الانتهاء يبدأ من وقت الإصدار. التراخيص الدائمة السابقة لا تحتاج تجديدًا.</p><p>لا ترفع المفتاح الخاص إلى GitHub أو مجلد الموقع ولا ترسله للمشترك. أرسل فقط ملف .sablicense الناتج.</p></main><script>
+const PUBLIC_KEY={"kty": "EC", "x": "Kmdz6e_WvWr0S_EXDq0wnI8brSLEFDFQZhih4YBJxd4", "y": "miXvPxlLQCAVUk39S296EGtxETQku--GqYXEl3MU22Y", "crv": "P-256"};
+// Licensing is offline and therefore uses the device clock.
+function licensePeriod(license){
+ if(!license)return null;
+ if((license.licenseType===undefined||license.licenseType==='perpetual')&&license.expiresAt===undefined)return {kind:'perpetual'};
+ if(license.licenseType!=='monthly')throw Error('نوع الترخيص غير مدعوم');
+ const start=Date.parse(license.startsAt||license.issuedAt),end=Date.parse(license.expiresAt);
+ if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start)throw Error('مدة الترخيص الشهري غير صحيحة');
+ return {kind:'monthly',start,end};
+}
+function isLicenseActive(license,now=Date.now()){
+ try{const p=licensePeriod(license);return !!p&&(p.kind==='perpetual'||(now>=p.start&&now<p.end));}catch{return false;}
+}
+function addCalendarMonth(value){
+ const date=new Date(value);if(!Number.isFinite(date.getTime()))throw Error('تاريخ غير صحيح');
+ const day=date.getUTCDate();date.setUTCDate(1);date.setUTCMonth(date.getUTCMonth()+1);
+ const last=new Date(Date.UTC(date.getUTCFullYear(),date.getUTCMonth()+1,0)).getUTCDate();
+ date.setUTCDate(Math.min(day,last));return date.toISOString();
+}
+function monthlyPayload({id,customer,now=new Date().toISOString(),previous=null}){
+ const current=Date.parse(now);if(!Number.isFinite(current)||!id||!customer?.trim())throw Error('بيانات الترخيص غير مكتملة');
+ if(previous&&previous.customer!==customer.trim())throw Error('الترخيص السابق يخص اسمًا آخر');
+ const p=licensePeriod(previous);if(p?.kind==='perpetual')throw Error('الترخيص السابق دائم ولا يحتاج إلى تجديد');
+ const continuing=p&&current<p.end;
+ return {product:'sabourati-pro-v2',edition:'pro',majorVersion:2,id,customer:customer.trim(),issuedAt:new Date(current).toISOString(),licenseType:'monthly',startsAt:continuing?new Date(p.start).toISOString():new Date(current).toISOString(),expiresAt:addCalendarMonth(continuing?p.end:current)};
+}
+
+const $=id=>document.getElementById(id),bytes=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0)),b64=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
+async function verifyPrevious(text){const e=JSON.parse(text),key=await crypto.subtle.importKey('jwk',PUBLIC_KEY,{name:'ECDSA',namedCurve:'P-256'},false,['verify']);if(!await crypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},key,bytes(e.signature),bytes(e.payload)))throw Error('توقيع الترخيص السابق غير صحيح');const d=JSON.parse(new TextDecoder().decode(bytes(e.payload)));if(d.product!=='sabourati-pro-v2'||d.edition!=='pro'||d.majorVersion!==2||!d.id||!d.customer)throw Error('ترخيص سابق غير صالح');licensePeriod(d);return d;}
+$('issue').onclick=async()=>{const button=$('issue');button.disabled=true;try{if(!crypto.subtle)throw Error('افتح الأداة باستخدام Chrome حديث على الكمبيوتر');if(!$('confirmed').checked)throw Error('أكد وصول المبلغ أولًا');const file=$('keyFile').files[0],customer=$('customer').value.trim();if(!file||!customer)throw Error('اختر ملف المفتاح واكتب اسم المشترك');if(file.size>20000)throw Error('ملف المفتاح أكبر من المتوقع');const pem=await file.text();if(!pem.includes('BEGIN PRIVATE KEY'))throw Error('اختر مفتاح PKCS8 بصيغة PEM');const key=await crypto.subtle.importKey('pkcs8',bytes(pem.replace(/-----[^-]+-----/g,'').replace(/\s/g,'')),{name:'ECDSA',namedCurve:'P-256'},true,['sign']);const jwk=await crypto.subtle.exportKey('jwk',key);if(jwk.x!==PUBLIC_KEY.x||jwk.y!==PUBLIC_KEY.y)throw Error('المفتاح لا يطابق هذه السبورة');let previous=null;if($('previous').files[0]){if($('previous').files[0].size>100000)throw Error('ملف الترخيص كبير');previous=await verifyPrevious(await $('previous').files[0].text());}const payload=monthlyPayload({id:crypto.randomUUID(),customer,previous}),raw=new TextEncoder().encode(JSON.stringify(payload));const signature=await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},key,raw);const envelope=JSON.stringify({payload:b64(raw),signature:b64(signature)},null,2),url=URL.createObjectURL(new Blob([envelope],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='Sabourati-Monthly.sablicense';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);$('message').textContent='تم إصدار الترخيص باسم '+customer+'\nينتهي: '+new Date(payload.expiresAt).toLocaleString('ar-EG');}catch(e){$('message').textContent=e.message;}finally{button.disabled=false;}};
+</script></html>
