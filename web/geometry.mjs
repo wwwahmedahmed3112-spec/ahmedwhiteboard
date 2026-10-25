@@ -1,6 +1,7 @@
+import {instrumentEdges,projectToEdge,nearestEdge} from './geometry-snap.mjs';
 export function installGeometry(api,add){
  const {$,showModal,closeModal,commit,viewCenter,requirePro,toast,pointFromClient}=api;
- const line=(a,b)=>commit({type:'line',x:a.x,y:a.y,ex:b.x,ey:b.y,size:3,color:document.documentElement.dataset.theme==='dark'?'#dceaff':'#365e99',opacity:1});
+ const line=(a,b)=>commit({type:'line',x:a.x,y:a.y,ex:b.x,ey:b.y,...(api.penStyle?.()||{size:3,color:document.documentElement.dataset.theme==='dark'?'#dceaff':'#365e99',opacity:1})});
  function showInstrument(kind){
   const el=document.createElement('section');el.className='geometry-panel';el.setAttribute('aria-label',kind==='ruler'?'المسطرة':kind==='protractor'?'المنقلة':'المثلث القائم');
   let angle=0,measure=60,drag=null;
@@ -9,7 +10,19 @@ export function installGeometry(api,add){
   const render=()=>{let markup='';if(kind==='ruler'){markup='<rect x="0" y="0" width="500" height="70" rx="5"/>';for(let i=0;i<=50;i++)markup+=`<path d="M${i*10} 0v${i%5?13:27}"/>`+(i%5?'':`<text x="${i*10+2}" y="48">${i/5}</text>`);}else if(kind==='triangle'){markup='<path d="M20 190L20 20L340 190Z"/><path d="M20 170h20v20"/><text x="48" y="177">90°</text>';for(let x=40;x<=320;x+=20)markup+=`<path d="M${x} 190v-12"/>`;}else{markup='<path d="M15 190A165 165 0 0 1 345 190Z"/>';for(let d=0;d<=180;d+=10){const a=d*Math.PI/180;markup+=`<path d="M${180+165*Math.cos(a)} ${190-165*Math.sin(a)}L${180+145*Math.cos(a)} ${190-145*Math.sin(a)}"/><text x="${180+127*Math.cos(a)}" y="${190-127*Math.sin(a)}">${d}</text>`;}const a=measure*Math.PI/180;markup+=`<path class="angle-ray" d="M330 190H180L${180+150*Math.cos(a)} ${190-150*Math.sin(a)}"/><circle cx="180" cy="190" r="4"/>`;}svg.innerHTML=markup;svg.style.transform='rotate('+angle+'deg)';};render();
   el.querySelector('.rotation').oninput=e=>{angle=+e.target.value;el.querySelector('output').textContent=angle+'°';render();};if(kind==='protractor')el.querySelector('.angle').oninput=e=>{measure=Math.max(0,Math.min(180,+e.target.value||0));render();};
   el.querySelector('.geometry-close').onclick=()=>el.remove();
-  function convert(x,y){const r=body.getBoundingClientRect(),w=kind==='ruler'?500:360,h=kind==='ruler'?70:210;const sx=r.width/w,sy=r.height/h,dx=(x-w/2)*sx,dy=(y-h/2)*sy,a=angle*Math.PI/180;return pointFromClient({clientX:r.left+r.width/2+dx*Math.cos(a)-dy*Math.sin(a),clientY:r.top+r.height/2+dx*Math.sin(a)+dy*Math.cos(a)});}
+  function client(x,y){const p=new DOMPoint(x,y).matrixTransform(svg.getScreenCTM());return {clientX:p.x,clientY:p.y};}
+  function convert(x,y){return pointFromClient(client(x,y));}
+  if(kind!=='protractor'){
+   const hint=document.createElement('p');hint.className='geometry-hint';hint.textContent='اسحب من عنوان الأداة لتحريكها. ارسم بالسحب على جسمها قرب الحافة المطلوبة؛ الخط يثبت على الحافة حتى ترفع يدك.';el.append(hint);
+   const preview=document.createElementNS(svg.namespaceURI,'line');preview.setAttribute('class','edge-preview');
+   let drawing=null;
+   const local=e=>new DOMPoint(e.clientX,e.clientY).matrixTransform(svg.getScreenCTM().inverse());
+   const update=e=>{drawing.end=projectToEdge(local(e),drawing.edge);for(const [k,v]of Object.entries({x1:drawing.start.x,y1:drawing.start.y,x2:drawing.end.x,y2:drawing.end.y}))preview.setAttribute(k,v);};
+   svg.onpointerdown=e=>{if(e.button>0||drawing)return;requirePro('الحقيبة الهندسية',()=>{e.preventDefault();e.stopPropagation();const p=local(e),edge=nearestEdge(p,instrumentEdges(kind));drawing={id:e.pointerId,edge,start:projectToEdge(p,edge)};svg.append(preview);svg.setPointerCapture(e.pointerId);update(e);});};
+   svg.onpointermove=e=>{if(drawing?.id===e.pointerId){e.preventDefault();update(e);}};
+   svg.onpointerup=e=>{if(drawing?.id!==e.pointerId)return;update(e);const {start,end}=drawing;drawing=null;preview.remove();svg.releasePointerCapture(e.pointerId);if(Math.hypot(end.x-start.x,end.y-start.y)>1)requirePro('الحقيبة الهندسية',()=>line(convert(start.x,start.y),convert(end.x,end.y)));};
+   svg.onpointercancel=svg.onlostpointercapture=()=>{drawing=null;preview.remove();};
+  }
   el.querySelector('.draw-geometry').onclick=()=>requirePro('الحقيبة الهندسية',()=>{if(kind==='ruler')line(convert(0,0),convert(500,0));else if(kind==='triangle'){line(convert(20,190),convert(20,20));line(convert(20,20),convert(340,190));line(convert(340,190),convert(20,190));}else{const a=measure*Math.PI/180;line(convert(180,190),convert(330,190));line(convert(180,190),convert(180+150*Math.cos(a),190-150*Math.sin(a)));}toast('رُسم الشكل على السبورة. يمكنك إغلاق الأداة وتحريك الرسم بالتحديد.');});
   const head=el.querySelector('.geometry-head');head.onpointerdown=e=>{if(e.target.closest('button'))return;drag={x:e.clientX,y:e.clientY,left:el.offsetLeft,top:el.offsetTop};head.setPointerCapture(e.pointerId);};head.onpointermove=e=>{if(!drag)return;el.style.left=Math.max(0,drag.left+e.clientX-drag.x)+'px';el.style.top=Math.max(0,drag.top+e.clientY-drag.y)+'px';};head.onpointerup=head.onpointercancel=()=>drag=null;$('viewport').append(el);
  }
