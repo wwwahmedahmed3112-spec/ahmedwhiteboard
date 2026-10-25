@@ -18,7 +18,7 @@ self.addEventListener('fetch',event=>{
  if(event.request.method!=='GET'||url.origin!==location.origin)return;
  const path=url.pathname.replace(/^\//,'')||'index.html';
  // Auth, APIs, receipts and the recovery page must always go to the server.
- if(!ASSETS.includes(path))return;
+ if(!ASSETS.includes(path)&&!path.startsWith('camera/'))return;
  event.respondWith((async()=>{
  const cache=await caches.open(CACHE);
  if(event.request.mode==='navigate'){
@@ -27,6 +27,6 @@ self.addEventListener('fetch',event=>{
    return new Response('تعذّر الاتصال. أعد المحاولة عند عودة الإنترنت.',{status:503,headers:{'Content-Type':'text/plain;charset=utf-8'}});
   }
  }
- const saved=await cache.match(path);return saved||fetch(event.request);
+ const saved=await cache.match(path);if(saved)return saved;const response=await fetch(event.request);if(response.ok&&path.startsWith('camera/'))await cache.put(path,response.clone());return response;
  })());
 });
