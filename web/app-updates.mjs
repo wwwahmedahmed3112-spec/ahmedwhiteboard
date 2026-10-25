@@ -1,3 +1,4 @@
+export function isNewWorkerVersion(data,current){return data?.type==='SABOURATI_VERSION'&&typeof data.version==='string'&&data.version!==current;}
 // Reload only after a coherent new worker has installed, never while recording.
 export function createUpdateApplier({canApply,save,resume,reload,onError}){
  let pending=false,applying=false;
@@ -14,7 +15,11 @@ export function initAppUpdates({version,canApply,save,resume,notice}){
  for(const event of ['pointerdown','pointermove','keydown','input'])document.addEventListener(event,()=>lastInput=Date.now(),{passive:true});
  const supported='serviceWorker'in navigator&&location.protocol==='https:';
  let controlled=supported&&!!navigator.serviceWorker.controller;
- if(supported){navigator.serviceWorker.addEventListener('controllerchange',()=>{if(controlled)queue();controlled=true;});}
+ if(supported){
+  navigator.serviceWorker.addEventListener('message',event=>{if(isNewWorkerVersion(event.data,version))queue();});
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(controlled)queue();controlled=true;navigator.serviceWorker.controller?.postMessage({type:'SABOURATI_GET_VERSION'});});
+  navigator.serviceWorker.controller?.postMessage({type:'SABOURATI_GET_VERSION'});
+ }
  async function check(){
   if(checking||!navigator.onLine)return;checking=true;
   try{
