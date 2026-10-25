@@ -1,0 +1,5 @@
+site/
+web/vendor/
+.env*
+*.pem
+*.sablicense
