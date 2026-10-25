@@ -1,3 +1,4 @@
+export function newerRelease(candidate,current){const parse=v=>/^\d+\.\d+\.\d+$/.test(v||'')?v.split('.').map(Number):null;const a=parse(candidate),b=parse(current);if(!a||!b)return false;for(let i=0;i<3;i++){if(a[i]!==b[i])return a[i]>b[i];}return false;}
 export function isNewWorkerVersion(data,current){return data?.type==='SABOURATI_VERSION'&&typeof data.version==='string'&&data.version!==current;}
 // Reload only after a coherent new worker has installed, never while recording.
 export function createUpdateApplier({canApply,save,resume,reload,onError}){
@@ -9,8 +10,8 @@ export function createUpdateApplier({canApply,save,resume,reload,onError}){
  }};
 }
 export function initAppUpdates({version,canApply,save,resume,notice}){
- let lastInput=Date.now(),registration=null,checking=false,ready=false;
- const applier=createUpdateApplier({canApply,save,resume,reload:()=>location.reload(),onError:()=>notice('التحديث جاهز، لكن تعذّر حفظ الدرس. احفظ نسخة ثم حاول مجددًا.',()=>applier.apply())});
+ let lastInput=Date.now(),registration=null,checking=false,ready=false,nextEntry=null;
+ const applier=createUpdateApplier({canApply,save,resume,reload:()=>nextEntry?location.replace(nextEntry):location.reload(),onError:()=>notice('التحديث جاهز، لكن تعذّر حفظ الدرس. احفظ نسخة ثم حاول مجددًا.',()=>applier.apply())});
  function queue(){if(ready)return;ready=true;applier.queue();notice('تحديث جديد جاهز. سيُطبّق تلقائيًا عند توقفك عن العمل، مع حفظ درسك.',()=>applier.apply());}
  for(const event of ['pointerdown','pointermove','keydown','input'])document.addEventListener(event,()=>lastInput=Date.now(),{passive:true});
  const supported='serviceWorker'in navigator&&location.protocol==='https:';
@@ -23,8 +24,10 @@ export function initAppUpdates({version,canApply,save,resume,notice}){
  async function check(){
   if(checking||!navigator.onLine)return;checking=true;
   try{
-   if(supported){registration ||= await navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'});await registration.update();}
-   else {const r=await fetch('./release.json',{cache:'no-store'});if(r.ok&&(await r.json()).version!==version)queue();}
+   const r=await fetch('/release.json',{cache:'no-store'});const published=r.ok?await r.json():null;
+   const target=newerRelease(published?.version,version)?published.version:version;
+   if(supported){registration=await navigator.serviceWorker.register('/sw-'+target+'.js',{updateViaCache:'none'});await registration.update();}
+   else if(target!==version){nextEntry='/entry-'+target+'.html';queue();}
   }catch{/* Offline clients keep their installed version. */}finally{checking=false;}
  }
  check();setInterval(check,5*60*1000);window.addEventListener('online',check);window.addEventListener('focus',check);document.addEventListener('visibilitychange',()=>{if(!document.hidden)check();});

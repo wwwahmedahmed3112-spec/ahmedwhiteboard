@@ -1,6 +1,6 @@
 // CACHE, ASSETS and APP_VERSION are injected by build-offline.mjs.
 // Optional PDF resources load on demand instead of blocking every update.
-const STARTUP_ASSETS=ASSETS.filter(path=>!/^vendor\/(cmaps|standard_fonts|wasm)\//.test(path));
+const STARTUP_ASSETS=ASSETS.filter(path=>!/(?:^|\/)vendor\/(cmaps|standard_fonts|wasm)\//.test(path));
 async function clean(response){
  if(!response.ok)throw Error('Asset unavailable');
  // A redirected precache response cannot satisfy a manual-redirect navigation.
@@ -8,7 +8,7 @@ async function clean(response){
 }
 self.addEventListener('install',event=>event.waitUntil((async()=>{
  const cache=await caches.open(CACHE);
- let cursor=0;await Promise.all(Array.from({length:Math.min(6,STARTUP_ASSETS.length)},async()=>{while(cursor<STARTUP_ASSETS.length){const path=STARTUP_ASSETS[cursor++];await cache.put(path,await clean(await fetch(new Request(path,{cache:'reload'}))));}}));
+ let cursor=0;await Promise.all(Array.from({length:Math.min(6,STARTUP_ASSETS.length)},async()=>{while(cursor<STARTUP_ASSETS.length){const path=STARTUP_ASSETS[cursor++];await cache.put(path,await clean(await fetch(new Request(path==='index.html'&&typeof ENTRY_URL==='string'?ENTRY_URL:path,{cache:'reload'}))));}}));
  await self.skipWaiting();
 })()));
 self.addEventListener('activate',event=>event.waitUntil((async()=>{
@@ -22,7 +22,7 @@ self.addEventListener('fetch',event=>{
  if(event.request.method!=='GET'||url.origin!==location.origin)return;
  const path=url.pathname.replace(/^\//,'')||'index.html';
  // Auth, APIs, receipts and the recovery page must always go to the server.
- if(!ASSETS.includes(path)&&!path.startsWith('camera/'))return;
+ if(!ASSETS.includes(path)&&!path.startsWith('camera/')&&!/^release\/[^/]+\/camera\//.test(path))return;
  event.respondWith((async()=>{
  const cache=await caches.open(CACHE);
  if(event.request.mode==='navigate'){

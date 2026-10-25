@@ -1,6 +1,6 @@
 export const CONFIG = {
   "commerceMode": "manual",
-  "appVersion": "2.5.1",
+  "appVersion": "2.5.2",
   "owner": "أحمد أشرف عبد العليم",
   "publicKey": {
     "kty": "EC",
