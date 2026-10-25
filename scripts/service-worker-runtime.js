@@ -22,8 +22,9 @@ self.addEventListener('fetch',event=>{
  event.respondWith((async()=>{
  const cache=await caches.open(CACHE);
  if(event.request.mode==='navigate'){
+  // HTML and modules must come from the same installed release.
+  const saved=await cache.match(path);if(saved)return clean(saved);
   try{return await clean(await fetch(event.request));}catch{
-   const saved=await cache.match(path);if(saved)return clean(saved);
    return new Response('تعذّر الاتصال. أعد المحاولة عند عودة الإنترنت.',{status:503,headers:{'Content-Type':'text/plain;charset=utf-8'}});
   }
  }
