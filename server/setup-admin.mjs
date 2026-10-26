@@ -1,0 +1,3 @@
+import {randomBytes} from 'node:crypto';import {writeFileSync,existsSync} from 'node:fs';import {hashPassword} from './security.mjs';
+const path='.server-admin-credentials.txt';if(existsSync(path))throw Error('Credentials already exist; do not overwrite them');const password=randomBytes(24).toString('base64url'),hash=hashPassword(password);
+writeFileSync(path,'سبّورتي — بيانات المالك الخاصة\nكلمة المرور: '+password+'\n\nضع القيمة التالية في ADMIN_PASSWORD_HASH فقط على Render:\n'+hash+'\n\nلا ترسل كلمة المرور أو هذا الملف للمشتركين ولا ترفعه إلى GitHub.\n',{mode:0o600,flag:'wx'});console.log('Private owner credentials saved locally. No credential values printed.');

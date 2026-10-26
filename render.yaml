@@ -1,0 +1,32 @@
+# This creates only a NEW licensing service. The existing static board stays separate.
+# Do not apply until the owner approves recurring service + 1 GB disk charges.
+services:
+  - type: web
+    name: ahmedwhiteboard-licenses
+    runtime: node
+    region: frankfurt
+    plan: 0.5c-512mb
+    repo: https://github.com/wwwahmedahmed3112-spec/ahmedwhiteboard
+    branch: main
+    autoDeployTrigger: 'off'
+    buildCommand: npm ci --prefix server --ignore-scripts
+    startCommand: node server/server.mjs
+    healthCheckPath: /healthz
+    numInstances: 1
+    disk:
+      name: license-ledger
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 24.22.1
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /var/data/licenses.sqlite
+      - key: ALLOWED_ORIGINS
+        value: https://ahmedwhiteboard.onrender.com
+      - key: MAX_BROWSERS
+        value: '2'
+      - key: ADMIN_PASSWORD_HASH
+        sync: false

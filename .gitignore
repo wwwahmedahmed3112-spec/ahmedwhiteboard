@@ -3,3 +3,9 @@ web/vendor/
 .env*
 *.pem
 *.sablicense
+
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.server-admin-credentials.txt
+server/node_modules/

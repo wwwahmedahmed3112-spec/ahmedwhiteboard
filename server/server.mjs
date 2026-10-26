@@ -1,0 +1,10 @@
+import {mkdirSync,readFileSync,chmodSync} from 'node:fs';import {dirname,resolve} from 'node:path';import {createStore} from './store.mjs';import {createLicenseServer} from './app.mjs';
+const production=process.env.NODE_ENV==='production',path=resolve(process.env.DB_PATH||'./server/dev.sqlite'),origin=process.env.PUBLIC_URL||process.env.RENDER_EXTERNAL_URL;
+if(!/^scrypt:[0-9a-f]{32}:[0-9a-f]{128}$/.test(process.env.ADMIN_PASSWORD_HASH||'')||!origin)throw Error('ADMIN_PASSWORD_HASH and PUBLIC_URL/RENDER_EXTERNAL_URL are required');
+if(production&&!path.startsWith('/var/data/'))throw Error('Production database must use the persistent /var/data disk');
+if(production&&!readFileSync('/proc/self/mountinfo','utf8').split('\n').some(line=>line.split(' ')[4]==='/var/data'))throw Error('Persistent /var/data mount not found; refusing ephemeral subscription storage');
+if(production&&new URL(origin).protocol!=='https:')throw Error('HTTPS is required');
+process.umask(0o077);mkdirSync(dirname(path),{recursive:true,mode:0o700});const store=createStore(path);chmodSync(path,0o600);const maxDevices=Number(process.env.MAX_BROWSERS||2);if(!Number.isInteger(maxDevices)||maxDevices<1||maxDevices>5)throw Error('MAX_BROWSERS must be between 1 and 5');
+const server=createLicenseServer({store,publicOrigin:new URL(origin).origin,adminPasswordHash:process.env.ADMIN_PASSWORD_HASH,maxDevices,production,allowedOrigins:(process.env.ALLOWED_ORIGINS||'https://ahmedwhiteboard.onrender.com').split(',').map(v=>new URL(v.trim()).origin)});
+server.requestTimeout=15000;server.headersTimeout=10000;server.listen(Number(process.env.PORT||10000),'0.0.0.0',()=>console.log('License server ready'));
+function stop(){server.close(()=>{store.close();process.exit(0);});setTimeout(()=>process.exit(1),15000).unref();}process.on('SIGTERM',stop);process.on('SIGINT',stop);
