@@ -1,9 +1,10 @@
+import {drawArabicNib} from './arabic-nib.mjs';
 import {validateVideoLessons} from './video-validation.mjs';
 import {licensePeriod} from './subscription.mjs';
 export function uid(){const b=new Uint8Array(16);crypto.getRandomValues(b);b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;return [...b].map((v,i)=>[4,6,8,10].includes(i)?'-'+v.toString(16).padStart(2,'0'):v.toString(16).padStart(2,'0')).join('');}
 export const APP_ID='sabourati-pro-v2';
 export const PATTERNS=['plain','lines','narrow','double','nine','grid','dots','isometric','graph'];
-export const TOOLS=['pen','brush','calligraphy','chalk','spray','marker','eraser','line','doubleLine','arrow','doubleArrow','rect','ellipse','triangle','diamond','pentagon','star','text','image','sticky','stamp'];
+export const TOOLS=['pen','brush','calligraphy','arabicNib','chalk','spray','marker','eraser','line','doubleLine','arrow','doubleArrow','rect','ellipse','triangle','diamond','pentagon','star','text','image','sticky','stamp'];
 export function newPage(name='صفحة جديدة'){return{id:uid(),name,w:1600,h:900,color:'#fcfdff',pattern:'plain',ops:[],pdf:null};}
 export function pageBounds(page){return{w:page.w||1600,h:page.h||900};}
 export function bounds(o){if(o.type==='text'||o.type==='sticky'||o.type==='stamp'){return{x:o.x-(o.w||Math.max(80,o.text.length*o.fontSize*.65)),y:o.y,w:o.w||Math.max(80,o.text.length*o.fontSize*.65),h:o.h||o.fontSize*1.5*o.text.split('\n').length};}if(o.type==='image')return{x:o.x,y:o.y,w:o.w,h:o.h};if(o.points?.length){const xs=o.points.map(p=>p.x),ys=o.points.map(p=>p.y),pad=o.size*2;return{x:Math.min(...xs)-pad,y:Math.min(...ys)-pad,w:Math.max(...xs)-Math.min(...xs)+pad*2,h:Math.max(...ys)-Math.min(...ys)+pad*2};}return{x:Math.min(o.x,o.ex),y:Math.min(o.y,o.ey),w:Math.abs(o.ex-o.x),h:Math.abs(o.ey-o.y)};}
@@ -12,7 +13,8 @@ export function scaleOp(o,f){const b=bounds(o),n={...o};if(o.points)n.points=o.p
 export function hitTest(o,p,tol=12){if(o.type==='eraser')return false;const b=bounds(o);return p.x>=b.x-tol&&p.x<=b.x+b.w+tol&&p.y>=b.y-tol&&p.y<=b.y+b.h+tol;}
 export function drawPattern(c,page){const{w,h}=pageBounds(page),p=page.pattern;c.fillStyle=page.color||'#fcfdff';c.fillRect(0,0,w,h);const hex=(page.color||'#fcfdff').slice(1),dark=parseInt(hex.slice(0,2),16)*.299+parseInt(hex.slice(2,4),16)*.587+parseInt(hex.slice(4,6),16)*.114<120;c.strokeStyle=dark?'#ffffff22':'#6280a426';c.fillStyle=dark?'#ffffff44':'#6280a440';c.lineWidth=1.2;const line=(x,y,ex,ey)=>{c.beginPath();c.moveTo(x,y);c.lineTo(ex,ey);c.stroke();};let step=p==='narrow'?30:p==='nine'?h/10:55;if(['lines','narrow','nine','double','grid','graph'].includes(p)){for(let y=step;y<h;y+=step){line(0,y,w,y);if(p==='double')line(0,y+16,w,y+16);}}if(['grid','graph'].includes(p))for(let x=step;x<w;x+=step)line(x,0,x,h);if(p==='dots')for(let y=28;y<h;y+=35)for(let x=28;x<w;x+=35){c.beginPath();c.arc(x,y,1.5,0,7);c.fill();}if(p==='isometric'){for(let y=0;y<h;y+=50)line(0,y,w,y);for(let x=-h;x<w+h;x+=58){line(x,0,x+h*.577,h);line(x,0,x-h*.577,h);}}if(p==='graph'){c.strokeStyle=dark?'#ffffff88':'#597da899';c.lineWidth=2;line(w/2,0,w/2,h);line(0,h/2,w,h/2);}}
 export function drawOp(c,o,images){c.save();c.strokeStyle=o.color||'#30433d';c.fillStyle=o.color||'#30433d';c.lineWidth=o.size||3;c.lineCap='round';c.lineJoin='round';c.globalAlpha=o.opacity??1;if(o.dash)c.setLineDash([o.size*3,o.size*2]);if(o.type==='marker'){c.globalAlpha*=.27;c.lineWidth=o.size*4;}if(o.type==='eraser'){c.globalCompositeOperation='destination-out';c.lineWidth=o.size*5;}
-if(['brush','calligraphy','chalk','spray'].includes(o.type)){
+if(o.type==='arabicNib'){drawArabicNib(c,o);}
+else if(['brush','calligraphy','chalk','spray'].includes(o.type)){
  const ps=o.points||[];for(let i=0;i<ps.length;i++){const p=ps[i],q=ps[Math.max(0,i-1)];c.lineWidth=(o.size||4)*(o.type==='brush'?1+3*(p.pressure??.5):1);c.beginPath();
  if(o.type==='spray'){for(let n=0;n<12;n++){const angle=(i*37+n*137.5)*Math.PI/180,r=((i*19+n*11)%23)/23*o.size*3;c.fillRect(p.x+Math.cos(angle)*r,p.y+Math.sin(angle)*r,1.3,1.3);}}
  else if(o.type==='calligraphy'){c.beginPath();c.moveTo(q.x-o.size,q.y-o.size);c.lineTo(q.x+o.size,q.y+o.size);c.lineTo(p.x+o.size,p.y+o.size);c.lineTo(p.x-o.size,p.y-o.size);c.fill();}

@@ -9,7 +9,7 @@ export function appendInkPoint(stroke,point,{scale=1,smooth=false,final=false}={
  const distance=Math.hypot(point.x-last.x,point.y-last.y),screen=distance*Math.max(.01,scale);
  if(distance===0)return;
  let q={...point};
- if(smooth&&!final&&['pen','marker'].includes(stroke.type)){
+ if(smooth&&!final&&['pen','marker','arabicNib'].includes(stroke.type)){
   const follow=Math.min(.9,.4+screen/12);q.x=last.x+(q.x-last.x)*follow;q.y=last.y+(q.y-last.y)*follow;
  }
  if(final||Math.hypot(q.x-last.x,q.y-last.y)*scale>=.3)stroke.points.push(q);
