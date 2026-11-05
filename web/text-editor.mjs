@@ -1,0 +1,33 @@
+import {BUILTIN_FONTS,ensureFont,importFont,validateFontAssets} from './text-fonts.mjs';
+import {textFont} from './text-motion.mjs';
+import {drawOp} from './core.mjs';
+export function openTextEditor(api,{point,sticky=false,existing=null,prefill=''}={}){
+ const {$,showModal,closeModal,toast,getAssets,setAssets,save,page,color}=api;
+ const original=existing||{},motion=original.motion||{start:0,hold:5,duration:.6,enter:'fade',exit:'fade'};
+ showModal(`<h2>${existing?'تعديل النص':sticky?'ملاحظة لاصقة':'نص وخطوط وحركة'}</h2>
+ <textarea id="textInput" aria-label="النص" placeholder="اكتب هنا، أو الصق بـ Ctrl+V…" dir="auto" maxlength="20000"></textarea>
+ <div class="text-editor-actions"><button type="button" id="copyText">نسخ النص</button><button type="button" id="pasteText">لصق النص</button><label class="font-upload">+ إضافة خط من جهازك<input id="fontUpload" type="file" accept=".ttf,.otf,.woff,.woff2"></label></div>
+ <div class="text-editor-grid"><label>الخط<select id="textFamily" aria-label="نوع خط النص"></select></label><label>الحجم<input id="textSize" aria-label="حجم النص" type="number" min="12" max="300" value="42"></label><label>اللون<input id="textColor" aria-label="لون النص" type="color"></label><label class="check"><input id="textBold" type="checkbox" checked>عريض</label></div>
+ <label class="check"><input id="textAnimated" type="checkbox">تفعيل دخول وخروج بالتوقيت</label>
+ <div id="textTiming" class="text-editor-grid"><label>بداية الظهور (ث)<input id="textStart" type="number" min="0" max="3600" step=".1"></label><label>مدة البقاء (ث)<input id="textHold" type="number" min=".1" max="3600" step=".1"></label><label>مدة كل حركة (ث)<input id="textDuration" type="number" min=".1" max="5" step=".1"></label><label>حركة الدخول<select id="textEnter"></select></label><label>حركة الخروج<select id="textExit"></select></label></div>
+ <p class="muted">التوقيت يبدأ عند «تشغيل النصوص» أو بدء التسجيل. أثناء التحرير والتصدير الثابت تظهر كل النصوص. الخط المضاف يُحفظ داخل ملف الدرس.</p>
+ <canvas id="textPreview" width="760" height="250" aria-label="معاينة النص"></canvas>
+ <div class="actions"><button type="button" id="previewTextMotion">معاينة الحركة</button><button type="button" class="primary" id="insertText">${existing?'حفظ التعديل':'إضافة إلى السبورة'}</button></div><p id="textEditorStatus" role="status"></p>`);
+ const family=$('textFamily'),input=$('textInput'),preview=$('textPreview');
+ function options(selected){family.replaceChildren();for(const [id,label] of [...BUILTIN_FONTS,...getAssets().map(a=>[a.family,a.label])]){const o=document.createElement('option');o.value=id;o.textContent=label;family.append(o);}family.value=selected||'Tahoma';if(!family.value)family.value='Tahoma';}
+ options(original.fontFamily);input.value=original.text||prefill;$('textSize').value=original.fontSize||42;$('textColor').value=original.color||color();$('textBold').checked=original.bold!==false;$('textAnimated').checked=!!original.motion;
+ for(const [id,value] of [['textStart',motion.start],['textHold',motion.hold],['textDuration',motion.duration]])$(id).value=value;
+ for(const id of ['textEnter','textExit']){for(const [value,label] of [['none','بدون حركة'],['fade','تلاشي'],['up','صعود'],['right','من اليمين'],['zoom','تكبير']]){const o=document.createElement('option');o.value=value;o.textContent=label;$(id).append(o);}$(id).value=id==='textEnter'?motion.enter:motion.exit;}
+ const number=(id,min,max,fallback)=>Math.max(min,Math.min(max,Number($(id).value)||fallback));
+ function value(){return {...original,type:sticky?'sticky':'text',text:input.value.trim(),fontSize:number('textSize',12,300,42),fontFamily:family.value,bold:$('textBold').checked,color:$('textColor').value,opacity:original.opacity??1,paper:original.paper||'#f5e8ba',motion:$('textAnimated').checked?{start:number('textStart',0,3600,0),hold:number('textHold',.1,3600,5),duration:number('textDuration',.1,5,.6),enter:$('textEnter').value,exit:$('textExit').value}:null};}
+ let previewFrame=0;
+ function paint(time){const c=preview.getContext('2d'),o=value();c.clearRect(0,0,760,250);c.fillStyle='#f5f7fb';c.fillRect(0,0,760,250);const f=Math.min(1,60/o.fontSize);c.save();c.translate(0,12);c.scale(f,f);drawOp(c,{...o,x:730/f,y:5,w:700/f,h:220/f},new Map(),{time});c.restore();$('textTiming').hidden=!$('textAnimated').checked;}
+ async function refresh(){cancelAnimationFrame(previewFrame);$('textEditorStatus').textContent='تحميل الخط…';try{await ensureFont(family.value,getAssets());if(!preview.isConnected)return;paint();$('textEditorStatus').textContent='';}catch{$('textEditorStatus').textContent='تعذّر تحميل الخط؛ جرّب خطًا آخر.';}}
+ for(const id of ['textInput','textSize','textColor','textBold','textAnimated','textStart','textHold','textDuration','textEnter','textExit'])$(id).oninput=()=>{cancelAnimationFrame(previewFrame);paint();};family.onchange=refresh;
+ $('fontUpload').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{const a=await importFont(file),assets=getAssets().filter(x=>x.family!==a.family);assets.push(a);validateFontAssets(assets);setAssets(assets);options(a.family);await refresh();}catch(error){toast(error.message);}e.target.value='';};
+ $('copyText').onclick=async()=>{try{await navigator.clipboard.writeText(input.value);toast('نُسخ النص');}catch{input.focus();input.select();toast('اضغط Ctrl+C لنسخ النص المحدد');}};
+ $('pasteText').onclick=async()=>{try{const text=await navigator.clipboard.readText();input.setRangeText(text,input.selectionStart,input.selectionEnd,'end');paint();}catch{input.focus();toast('اضغط Ctrl+V أو اختر «لصق» من لوحة المفاتيح');}};
+ $('previewTextMotion').onclick=()=>{cancelAnimationFrame(previewFrame);const m=value().motion;if(!m){paint();return;}const start=performance.now(),end=m.start+2*m.duration+m.hold;function frame(){if(!preview.isConnected||!$('modal').open)return;const time=(performance.now()-start)/1000;paint(time);$('textEditorStatus').textContent=time.toFixed(1)+' ث';if(time<=end+.2)previewFrame=requestAnimationFrame(frame);}frame();};
+ $('insertText').onclick=async()=>{const o=value();if(!o.text){toast('اكتب النص أولًا');return;}try{await ensureFont(o.fontFamily,getAssets());const ctx=preview.getContext('2d');ctx.font=textFont(o);const measured=Math.max(...o.text.split('\n').map(t=>ctx.measureText(t).width));o.w=Math.max(10,measured+o.fontSize*.2);o.h=o.text.split('\n').length*o.fontSize*1.5;const p=page();o.x=original.x??Math.min(p.w,Math.max(point.x,o.w));o.y=original.y??point.y;cancelAnimationFrame(previewFrame);save(o);closeModal();}catch{toast('تعذّر تحميل الخط. اختر خطًا آخر قبل الحفظ.');}};
+ refresh();input.focus();
+}
