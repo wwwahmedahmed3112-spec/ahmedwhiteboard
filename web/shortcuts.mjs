@@ -1,4 +1,4 @@
 export function isTextEditing(target){if(!target)return false;if(target.isContentEditable||target.closest?.('[contenteditable="true"]'))return true;const tag=target.tagName?.toUpperCase();return tag==='TEXTAREA'||tag==='SELECT'||(tag==='INPUT'&&!['range','color','checkbox','radio','button','file','submit'].includes(target.type));}
 export function undoAction(event){if(event.altKey||!(event.ctrlKey||event.metaKey)||isTextEditing(event.target))return null;const code=event.code,key=event.key?.toLowerCase();if(code==='KeyZ'||key==='z')return event.shiftKey?'redo':'undo';if(code==='KeyY'||key==='y')return 'redo';return null;}
-export function pageEditState(page,ops=page.ops){return {ops,pdf:page.pdf||null,w:page.w,h:page.h};}
-export function applyPageEditState(page,state){page.ops=state.ops;page.pdf=state.pdf;if(state.w)page.w=state.w;if(state.h)page.h=state.h;}
+export function pageEditState(page,ops=page.ops){return {ops,pdf:page.pdf||null,w:page.w,h:page.h,format:page.format||null,pdfBox:page.pdfBox?{...page.pdfBox}:null};}
+export function applyPageEditState(page,state){if('format' in state)page.format=state.format;if('pdfBox' in state)page.pdfBox=state.pdfBox;page.ops=state.ops;page.pdf=state.pdf;if(state.w)page.w=state.w;if(state.h)page.h=state.h;}
